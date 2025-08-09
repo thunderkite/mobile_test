@@ -1,0 +1,101 @@
+package backend
+
+import io.ktor.server.engine.*
+import io.ktor.server.netty.*
+import io.ktor.server.application.*
+import io.ktor.server.response.*
+import io.ktor.server.request.*
+import io.ktor.server.routing.*
+import io.ktor.server.plugins.contentnegotiation.*
+import io.ktor.serialization.kotlinx.json.*
+import io.ktor.server.plugins.swagger.*
+import io.ktor.http.*
+import io.ktor.server.plugins.cors.routing.*
+import backend.db.DatabaseFactory
+import backend.repositories.UserRepository
+import backend.routes.authRoutes
+import backend.routes.userRoutes
+import backend.admin.adminRoutes
+import kotlinx.serialization.json.Json
+import java.net.InetAddress
+import java.net.NetworkInterface
+
+fun main() {
+    // Получаем информацию о сетевых интерфейсах для диагностики
+    val localHost = InetAddress.getLocalHost()
+    println("Локальный хост: ${localHost.hostName}, IP: ${localHost.hostAddress}")
+    
+    val networkInterfaces = NetworkInterface.getNetworkInterfaces()
+    println("Доступные сетевые интерфейсы:")
+    networkInterfaces.toList().forEach { networkInterface ->
+        println("  Интерфейс: ${networkInterface.name}, ${networkInterface.displayName}")
+        networkInterface.inetAddresses.toList().forEach { address ->
+            println("    Адрес: ${address.hostAddress}")
+        }
+    }
+    
+    println("Запуск сервера на порту 9876...")
+    embeddedServer(Netty, port = 9876, host = "0.0.0.0") {
+        println("Инициализация сервера на хосте 0.0.0.0:9876...")
+        
+        // Инициализируем базу данных
+        println("Подключение к базе данных...")
+        DatabaseFactory.init()
+        println("Подключение к базе данных выполнено")
+        
+        // Репозиторий пользователей
+        val userRepository = UserRepository()
+        
+        // Настраиваем CORS
+        install(CORS) {
+            anyHost()
+            allowMethod(HttpMethod.Options)
+            allowMethod(HttpMethod.Put)
+            allowMethod(HttpMethod.Delete)
+            allowMethod(HttpMethod.Patch)
+            allowHeader(HttpHeaders.Authorization)
+            allowHeader(HttpHeaders.ContentType)
+            allowHeader(HttpHeaders.AccessControlAllowOrigin)
+            allowCredentials = true
+            allowNonSimpleContentTypes = true
+        }
+        
+        // Настраиваем плагины
+        install(ContentNegotiation) {
+            json(Json {
+                prettyPrint = true
+                isLenient = true
+            })
+        }
+        
+        // Настраиваем маршруты
+        routing {
+            // Swagger UI
+            swaggerUI(path = "swagger", swaggerFile = "openapi/documentation.yaml")
+            
+            // Тестовый маршрут для проверки доступности
+            get("/api/test") {
+                val clientHost = call.request.local.remoteHost
+                val clientAddress = call.request.origin.remoteHost
+                println("Получен запрос от: $clientAddress ($clientHost)")
+                call.respond(mapOf("status" to "success", "message" to "API доступно!", "client" to clientAddress))
+            }
+            
+            // Редирект с корня на админку
+            get("/") {
+                call.respondRedirect("/admin", permanent = false)
+            }
+            
+            // Маршруты аутентификации
+            authRoutes(userRepository)
+            
+            // Маршруты управления пользователями
+            userRoutes(userRepository)
+            
+            // Маршруты админ-панели
+            adminRoutes(userRepository)
+        }
+        
+        println("Сервер настроен и готов принимать запросы")
+    }.start(wait = true)
+} 
