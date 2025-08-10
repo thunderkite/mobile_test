@@ -20,7 +20,7 @@ application {
 }
 
 tasks.test {
-    useJUnitPlatform()
+    useJUnit()
     reports {
         junitXml.required.set(true)
         html.required.set(true)
@@ -35,4 +35,5 @@ dependencies {
     implementation(libs.ktor.server.config.yaml)
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.kotlin.test.junit)
+    testImplementation("org.junit.jupiter:junit-jupiter:5.9.2")
 }
