@@ -19,6 +19,14 @@ application {
     mainClass = "io.ktor.server.netty.EngineMain"
 }
 
+tasks.test {
+    useJUnitPlatform()
+    reports {
+        junitXml.required.set(true)
+        html.required.set(true)
+    }
+}
+
 dependencies {
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.netty)
